@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero">
+  <h1>Test a reaction order the way you'd do it on paper &mdash; only faster.</h1>
+  <p class="hero-sub">
+    Enter concentration-time data, pick a kinetic model, and watch every transformation,
+    regression, and accept/reject decision happen in front of you. No hidden guesses.
+  </p>
+</section>
+
+{% if error %}
+  <div class="alert alert-error">
+    <strong>Couldn't run the analysis.</strong>
+    <span>{{ error }}</span>
+  </div>
+{% endif %}
+
+<form id="analyzeForm" action="{{ url_for('analyze') }}" method="POST" enctype="multipart/form-data">
+
+  <section class="card">
+    <h2>1. Choose a method</h2>
+    <label class="field-label" for="method">Analysis method</label>
+    <select name="method" id="method" class="select-method">
+      {% for key, label in methods.items() %}
+        <option value="{{ key }}" {% if selected_method == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="method-note" data-method-note="integral">
+      <strong>-r_A = k C_A^n.</strong> Tests n = 0, 0.25, 0.5 &hellip; 3 against C_A vs t (n=0), ln(C_A) vs t (n=1),
+      or C_A^(1&minus;n) vs t (n&ne;1), then refines around the best fit to a fractional order.
+    </div>
+    <div class="method-note" data-method-note="differential">
+      <strong>ln(-r_A) = ln k + n&middot;ln(C_A).</strong> Differentiates C_A vs t numerically, then finds a continuous
+      (fractional-capable) order directly from the slope of the log-log plot.
+    </div>
+    <div class="method-note" data-method-note="autocatalytic">
+      <strong>A + B &rarr; 2B, &minus;r_A = k C_A C_B.</strong> Requires a measured B concentration alongside A at each time point.
+    </div>
+    <div class="method-note" data-method-note="reversible">
+      <strong>A &#8652; B.</strong> Requires an estimate of the equilibrium concentration C_Ae (or the app will
+      approximate it from your lowest observed concentration).
+    </div>
+    <div class="method-note" data-method-note="irreversible">
+      <strong>-r_A = k C_A^n.</strong> Same transparent order-testing engine as the Integral Method, for a strictly one-way A &rarr; products reaction.
+    </div>
+  </section>
+
+  <section class="card" id="reversibleExtra" style="display:none;">
+    <h2>2. Equilibrium concentration</h2>
+    <label class="field-label" for="c_ae">C<sub>Ae</sub> (leave blank to approximate from the data's minimum concentration)</label>
+    <input type="number" step="any" min="0" id="c_ae" name="c_ae" placeholder="e.g. 2.0">
+  </section>
+
+  <section class="card">
+    <h2 id="dataSectionTitle">2. Enter your data</h2>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="manual">Manual input</button>
+      <button type="button" class="tab-btn" data-tab="csv">CSV upload</button>
+    </div>
+
+    <div class="tab-panel" data-panel="manual">
+      <table class="data-table" id="dataTable">
+        <thead>
+          <tr>
+            <th>Time (t)</th>
+            <th>Concentration (C&#8320;<sub>A</sub>)</th>
+            <th class="col-cb" style="display:none;">Concentration (C<sub>B</sub>)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="dataTableBody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+      <button type="button" id="addRowBtn" class="btn btn-secondary">+ Add row</button>
+    </div>
+
+    <div class="tab-panel" data-panel="csv" style="display:none;">
+      <label class="field-label" for="csv_file">CSV file</label>
+      <input type="file" id="csv_file" name="csv_file" accept=".csv">
+      <p class="hint">Expected columns: <code>Time,Concentration</code>{{ '' }}<span class="cb-hint" style="display:none;">, and <code>C_B</code> for the autocatalytic module</span>.</p>
+      <pre class="csv-example">Time,Concentration
+0,10
+20,8
+40,6
+60,5</pre>
+    </div>
+
+    <input type="hidden" name="data_json" id="dataJson">
+  </section>
+
+  <div class="submit-row">
+    <button type="submit" class="btn btn-primary btn-large" id="analyzeBtn">Analyze reaction data</button>
+    <span class="loading-indicator" id="loadingIndicator" style="display:none;">Running regression&hellip;</span>
+  </div>
+</form>
+
+{% endblock %}
