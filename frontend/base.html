@@ -1,32 +1,117 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}Chemical Reaction Kinetics Analyzer{% endblock %}</title>
-<link rel="stylesheet" href="{{ url_for('frontend', filename='css/style.css') }}">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Chemical Reaction Kinetics Analyzer{% endblock %}</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- KaTeX for crisp mathematical formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+  
+  <!-- Plotly.js for interactive scientific graphing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+  
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+  <!-- Header / Navigation -->
   <header class="site-header">
     <div class="header-inner">
       <a class="brand" href="{{ url_for('index') }}">
-        <span class="brand-mark">k</span>
-        <span class="brand-text">Reaction Kinetics Analyzer</span>
+        <div class="brand-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/>
+            <path d="M5.52 16h12.96"/>
+          </svg>
+        </div>
+        <div class="brand-text-group">
+          <span class="brand-text">Kinetics<span class="brand-accent">Lab</span></span>
+          <span class="brand-sub">Reaction Kinetics Analyzer</span>
+        </div>
       </a>
-      <span class="header-tag">Chemical Reaction Engineering &middot; University Project</span>
+      
+      <div class="header-actions">
+        <nav class="nav-links">
+          <a href="{{ url_for('index') }}" class="nav-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Analyzer
+          </a>
+          <button type="button" class="nav-link btn-link" id="helpModalBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Guide &amp; Models
+          </button>
+        </nav>
+        
+        <button type="button" class="theme-toggle" id="themeToggle" title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
+          <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
     </div>
   </header>
 
-  <main class="page">
+  <!-- Main Body Content -->
+  <main class="page-container">
     {% block content %}{% endblock %}
   </main>
 
+  <!-- Help & Guide Modal -->
+  <div class="modal-backdrop" id="helpModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Chemical Reaction Engineering Kinetics Guide</h3>
+        <button type="button" class="modal-close" id="helpModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="guide-grid">
+          <div class="guide-item">
+            <h4>1. Integral Method</h4>
+            <p>Evaluates candidate orders $n \in [0, 3]$. Integrates $-r_A = -\frac{dC_A}{dt} = k C_A^n$ and performs linear regression on transformed $C_A$ vs $t$. Refines around the maximum $R^2$ to find fractional orders with high precision.</p>
+          </div>
+          <div class="guide-item">
+            <h4>2. Differential Method</h4>
+            <p>Computes continuous rate values $-r_A \approx -\frac{\Delta C_A}{\Delta t}$ using central differences. Fits $\ln(-r_A) = \ln(k) + n\ln(C_A)$ to deduce continuous reaction orders directly from the slope.</p>
+          </div>
+          <div class="guide-item">
+            <h4>3. Reversible Reactions ($A \rightleftharpoons B$)</h4>
+            <p>Accounts for equilibrium limitation: $-r_A = k_1 C_A - k_2 C_B$. Linearizes via $\ln\left[\frac{C_A - C_{Ae}}{C_{A0}-C_{Ae}}\right] = -(k_1+k_2)t$ to recover forward $k_1$, reverse $k_2$, and equilibrium constant $K_{eq}$.</p>
+          </div>
+          <div class="guide-item">
+            <h4>4. Autocatalytic Reactions ($A + B \to 2B$)</h4>
+            <p>Product $B$ catalyzes its own formation: $-r_A = k C_A C_B$. Evaluates the linear relationship $-r_A$ vs $C_A \cdot C_B$ passing through the origin.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
   <footer class="site-footer">
-    <p>Built for coursework in Chemical Reaction Engineering. Every result shown is derived transparently from the data you provide.</p>
+    <div class="footer-inner">
+      <div class="footer-info">
+        <p><strong>Chemical Reaction Kinetics Analyzer</strong> &mdash; Designed for Chemical Reaction Engineering analysis, reactor design, and kinetic modeling.</p>
+        <p class="footer-sub">Transparent mathematical transformations, linear regressions, physical validity checks, and predictive simulations.</p>
+      </div>
+      <div class="footer-badges">
+        <span class="badge-pill">Flask + Python</span>
+        <span class="badge-pill">SciPy &amp; NumPy</span>
+        <span class="badge-pill">Plotly &amp; KaTeX</span>
+      </div>
+    </div>
   </footer>
 
-  <script src="{{ url_for('frontend', filename='js/main.js') }}"></script>
+  <!-- Core JavaScript -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
+

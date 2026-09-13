@@ -1,124 +1,284 @@
 {% extends "base.html" %}
-{% block title %}Results &mdash; Chemical Reaction Kinetics Analyzer{% endblock %}
+{% block title %}Kinetic Analysis Results &mdash; {{ result.method }}{% endblock %}
 {% block content %}
 
-<a class="back-link" href="{{ url_for('index') }}">&larr; New analysis</a>
+<!-- Results Top Navigation & Action Bar -->
+<div class="results-header-bar">
+  <a class="btn-back" href="{{ url_for('index') }}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    New Analysis
+  </a>
 
-<section class="card">
-  <h2>1. Input data</h2>
-  <p class="muted">{{ result.original_data.t|length }} data points.</p>
-  <div class="table-scroll">
-    <table class="data-table readonly">
-      <thead>
-        <tr>
-          <th>t</th><th>C<sub>A</sub></th>
-          {% if method_key == 'autocatalytic' %}<th>C<sub>B</sub></th>{% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for i in range(result.original_data.t|length) %}
-        <tr>
-          <td>{{ '%.4g' % result.original_data.t[i] }}</td>
-          <td>{{ '%.4g' % (result.original_data.C_A[i] if method_key == 'autocatalytic' else result.original_data.C[i]) }}</td>
-          {% if method_key == 'autocatalytic' %}<td>{{ '%.4g' % result.original_data.C_B[i] }}</td>{% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="results-actions">
+    <button type="button" class="btn btn-secondary btn-sm" id="printReportBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print Lab Report
+    </button>
+    <button type="button" class="btn btn-secondary btn-sm" id="exportDataCsvBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export Data (CSV)
+    </button>
   </div>
+</div>
+
+<!-- Key Kinetic Parameters Dashboard -->
+<div class="metrics-dashboard">
+  <!-- Metric 1: Reaction Order -->
+  <div class="metric-card accent-green">
+    <div class="metric-header">
+      <span class="metric-label">Reaction Order</span>
+      <span class="badge-decision best">Best Fit</span>
+    </div>
+    <div class="metric-value">
+      n = {% if result.reaction_order_display is defined %}{{ result.reaction_order_display }}{% elif result.reaction_order is defined %}{{ '%.2f' % result.reaction_order }}{% else %}1.00{% endif %}
+    </div>
+    <div class="metric-sub">
+      {% if result.approx_note %}{{ result.approx_note }}{% else %}{{ result.method }}{% endif %}
+    </div>
+  </div>
+
+  <!-- Metric 2: Rate Constant k -->
+  <div class="metric-card accent-cyan">
+    <div class="metric-header">
+      <span class="metric-label">Rate Constant k</span>
+      <span class="badge-pill">Kinetic</span>
+    </div>
+    <div class="metric-value">
+      {% if result.rate_constant is defined and result.rate_constant is not none %}
+        {{ '%.4g' % result.rate_constant }}
+      {% elif result.forward_rate_constant is defined %}
+        {{ '%.4g' % result.forward_rate_constant }}
+      {% else %}
+        &mdash;
+      {% endif %}
+    </div>
+    <div class="metric-sub">
+      {% if method_key in ['integral', 'irreversible', 'differential'] %}
+        Unit: $(\text{mol/L})^{1-n}\cdot\text{time}^{-1}$
+      {% elif method_key == 'reversible' %}
+        Forward $k_1$ | Reverse $k_2 = {{ '%.4g' % result.reverse_rate_constant }}$
+      {% elif method_key == 'autocatalytic' %}
+        Unit: $\text{L}/(\text{mol}\cdot\text{time})$
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Metric 3: Coefficient of Determination R² -->
+  <div class="metric-card accent-amber">
+    <div class="metric-header">
+      <span class="metric-label">Goodness of Fit</span>
+      <span class="badge-pill">Linearity</span>
+    </div>
+    <div class="metric-value">
+      R&sup2; = {% if result.r_squared is defined %}{{ '%.4f' % result.r_squared }}{% elif result.best_step is defined %}{{ '%.4f' % result.best_step.r_squared }}{% else %}&mdash;{% endif %}
+    </div>
+    <div class="metric-sub">
+      {% set fit_r2 = result.r_squared if result.r_squared is defined else (result.best_step.r_squared if result.best_step is defined else 1.0) %}
+      {% if fit_r2 >= 0.99 %}
+        <span style="color: var(--success); font-weight: 600;">Excellent linear correlation</span>
+      {% elif fit_r2 >= 0.95 %}
+        <span style="color: var(--accent); font-weight: 600;">Good linear agreement</span>
+      {% else %}
+        <span style="color: var(--warning); font-weight: 600;">Moderate correlation</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Metric 4: Initial or Equilibrium Parameter -->
+  <div class="metric-card">
+    <div class="metric-header">
+      <span class="metric-label">
+        {% if method_key == 'reversible' %}Equilibrium K{% else %}Initial Conc. C<sub>A0</sub>{% endif %}
+      </span>
+      <span class="badge-pill">State</span>
+    </div>
+    <div class="metric-value">
+      {% if method_key == 'reversible' %}
+        {{ '%.4g' % result.equilibrium_constant }}
+      {% elif result.initial_concentration is defined and result.initial_concentration is not none %}
+        {{ '%.4g' % result.initial_concentration }} <span style="font-size: 0.9rem; font-weight: 500;">mol/L</span>
+      {% elif result.original_data is defined %}
+        {{ '%.4g' % result.original_data.C[0] }} <span style="font-size: 0.9rem; font-weight: 500;">mol/L</span>
+      {% else %}
+        &mdash;
+      {% endif %}
+    </div>
+    <div class="metric-sub">
+      {% if method_key == 'reversible' %}
+        $K_{eq} = k_1 / k_2$ ($C_{Ae} = {{ '%.4g' % result.equilibrium_concentration }}$)
+      {% else %}
+        Extrapolated at $t = 0$
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Highlighted Final Kinetic Rate Equation -->
+<div class="equation-highlight-card">
+  <div class="equation-label-row">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span class="equation-badge">Final Derived Rate Law</span>
+      <span class="field-hint">{{ result.method }}</span>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" id="copyEquationBtn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copy Rate Law
+    </button>
+  </div>
+  <div class="final-rate-math" id="finalEquationText">
+    $${{ result.final_rate_equation }}$$
+  </div>
+</div>
+
+<!-- Interactive Multi-View Graphical Visualizations -->
+<section class="plot-section-card">
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Graphical Analysis &amp; Kinetic Simulations</h2>
+    </div>
+  </div>
+
+  <div class="plot-tabs">
+    <button type="button" class="plot-tab-btn active" data-plot-tab="linearFit">
+      Linearized Fit Plot
+    </button>
+    <button type="button" class="plot-tab-btn" data-plot-tab="concentrationTime">
+      $C_A(t)$ Concentration vs Time Decay
+    </button>
+    <button type="button" class="plot-tab-btn" data-plot-tab="residuals">
+      Model Residuals ($e_i$)
+    </button>
+    {% if method_key in ['integral', 'irreversible'] and result.coarse_results %}
+    <button type="button" class="plot-tab-btn" data-plot-tab="ordersComparison">
+      Tested Orders ($R^2$ Scan)
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- Plot Containers -->
+  <div id="linearFitPlot" class="plotly-chart-wrapper"></div>
+  <div id="concentrationTimePlot" class="plotly-chart-wrapper" style="display:none;"></div>
+  <div id="residualsPlot" class="plotly-chart-wrapper" style="display:none;"></div>
+  {% if method_key in ['integral', 'irreversible'] and result.coarse_results %}
+  <div id="ordersComparisonPlot" class="plotly-chart-wrapper" style="display:none;"></div>
+  {% endif %}
 </section>
 
-<section class="card">
-  <h2>2. Selected method &amp; kinetic equation</h2>
-  <p class="badge-method">{{ result.method }}{% if result.reaction %} &nbsp;&middot;&nbsp; {{ result.reaction }}{% endif %}</p>
-  <p class="equation">{{ result.equation }}</p>
-</section>
+<!-- Method Specific Details -->
 
 {% if method_key in ['integral', 'irreversible'] %}
 
+<!-- Transparent Order Testing Engine Logs -->
 <section class="card">
-  <h2>3. Reaction order testing process</h2>
-  <p class="muted">Coarse scan across candidate orders, transformed and fitted one at a time.</p>
-  <div class="order-cards">
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Reaction Order Testing &amp; Verification Process</h2>
+    </div>
+    <span class="field-hint">Transparent scan across candidate reaction orders with physical validity checks</span>
+  </div>
+
+  <h3 style="margin-bottom: 0.5rem;">1. Coarse Candidate Order Scan ($n = 0 \dots 3$)</h3>
+  <div class="order-cards-container">
     {% for step in result.coarse_results %}
-    <details class="order-card {{ 'best' if step.decision == 'Best' else ('rejected' if step.decision == 'Rejected' else 'candidate') }}">
-      <summary>
-        <span>Order n = {{ step.order }}</span>
-        <span class="decision-badge">
-          {% if step.decision == 'Best' %}&#9989; Best{% elif step.decision == 'Rejected' %}&#10060; Rejected{% else %}&#9888; {{ step.decision }}{% endif %}
+    <details class="order-test-card {{ 'status-best' if step.decision == 'Best' else ('status-rejected' if step.decision == 'Rejected' else 'status-candidate') }}" {% if step.decision == 'Best' %}open{% endif %}>
+      <summary class="order-summary">
+        <div class="order-pill-title">
+          <span>Order $n = {{ step.order }}$</span>
+          <span style="color: var(--text-muted); font-size: 0.85rem;">({{ step.transformation }})</span>
+        </div>
+        <span class="badge-decision {{ 'best' if step.decision == 'Best' else ('rejected' if step.decision == 'Rejected' else 'candidate') }}">
+          {% if step.decision == 'Best' %}&#10004; Best Fit{% elif step.decision == 'Rejected' %}&#10006; Rejected{% else %}&#9888; Candidate{% endif %}
         </span>
       </summary>
-      <p><strong>Equation:</strong> {{ step.equation }}</p>
-      <p><strong>Transformation:</strong> Y = {{ step.y_label }}, X = {{ step.x_label }}</p>
-      {% if step.slope is not none %}
-      <p><strong>Slope</strong> = {{ '%.6g' % step.slope }} &nbsp;|&nbsp; <strong>Intercept</strong> = {{ '%.6g' % step.intercept }} &nbsp;|&nbsp; <strong>R&sup2;</strong> = {{ '%.5f' % step.r_squared }}</p>
-      {% endif %}
-      {% if step.rate_constant is not none %}
-      <p><strong>k</strong> = {{ '%.6g' % step.rate_constant }} {% if step.initial_concentration %}&nbsp;|&nbsp; <strong>C<sub>A0</sub></strong> = {{ '%.6g' % step.initial_concentration }}{% endif %}</p>
-      {% endif %}
-      <p class="reason">{{ step.reason }}</p>
+      <div class="order-details-body">
+        <div><strong>Transformation Equation:</strong> ${{ step.equation }}$</div>
+        <div class="order-stat-row">
+          {% if step.slope is not none %}
+          <span class="stat-item">Slope: <strong>{{ '%.5g' % step.slope }}</strong></span>
+          <span class="stat-item">Intercept: <strong>{{ '%.5g' % step.intercept }}</strong></span>
+          <span class="stat-item">R&sup2;: <strong>{{ '%.5f' % step.r_squared }}</strong></span>
+          {% endif %}
+          {% if step.rate_constant is not none %}
+          <span class="stat-item">Rate constant $k$: <strong>{{ '%.5g' % step.rate_constant }}</strong></span>
+          {% endif %}
+          {% if step.initial_concentration %}
+          <span class="stat-item">Initial $C_{A0}$: <strong>{{ '%.5g' % step.initial_concentration }}</strong></span>
+          {% endif %}
+        </div>
+        <div class="order-reason"><strong>Evaluation Note:</strong> {{ step.reason }}</div>
+      </div>
     </details>
     {% endfor %}
   </div>
 
   {% if result.refine_results %}
-  <h3>Fractional-order refinement around n = {{ result.coarse_results|selectattr('decision','equalto','Best')|map(attribute='order')|first or '' }}</h3>
-  <div class="order-cards">
+  <h3 style="margin: 1.5rem 0 0.5rem;">2. Fractional-Order Fine Scan Refinement</h3>
+  <div class="order-cards-container">
     {% for step in result.refine_results %}
-    <details class="order-card {{ 'best' if step.decision == 'Best' else ('rejected' if step.decision == 'Rejected' else 'candidate') }}">
-      <summary>
-        <span>Order n = {{ step.order }}</span>
-        <span class="decision-badge">
-          {% if step.decision == 'Best' %}&#9989; Best{% elif step.decision == 'Rejected' %}&#10060; Rejected{% else %}&#9888; {{ step.decision }}{% endif %}
+    <details class="order-test-card {{ 'status-best' if step.decision == 'Best' else ('status-rejected' if step.decision == 'Rejected' else 'status-candidate') }}" {% if step.decision == 'Best' %}open{% endif %}>
+      <summary class="order-summary">
+        <div class="order-pill-title">
+          <span>Order $n = {{ step.order }}$</span>
+          <span style="color: var(--text-muted); font-size: 0.85rem;">({{ step.transformation }})</span>
+        </div>
+        <span class="badge-decision {{ 'best' if step.decision == 'Best' else ('rejected' if step.decision == 'Rejected' else 'candidate') }}">
+          {% if step.decision == 'Best' %}&#10004; Best Fit{% elif step.decision == 'Rejected' %}&#10006; Rejected{% else %}&#9888; Candidate{% endif %}
         </span>
       </summary>
-      <p><strong>Equation:</strong> {{ step.equation }}</p>
-      {% if step.slope is not none %}
-      <p><strong>Slope</strong> = {{ '%.6g' % step.slope }} &nbsp;|&nbsp; <strong>Intercept</strong> = {{ '%.6g' % step.intercept }} &nbsp;|&nbsp; <strong>R&sup2;</strong> = {{ '%.5f' % step.r_squared }}</p>
-      {% endif %}
-      <p class="reason">{{ step.reason }}</p>
+      <div class="order-details-body">
+        <div><strong>Transformation:</strong> ${{ step.equation }}$</div>
+        <div class="order-stat-row">
+          {% if step.slope is not none %}
+          <span class="stat-item">Slope: <strong>{{ '%.5g' % step.slope }}</strong></span>
+          <span class="stat-item">Intercept: <strong>{{ '%.5g' % step.intercept }}</strong></span>
+          <span class="stat-item">R&sup2;: <strong>{{ '%.5f' % step.r_squared }}</strong></span>
+          {% endif %}
+          {% if step.rate_constant is not none %}
+          <span class="stat-item">k: <strong>{{ '%.5g' % step.rate_constant }}</strong></span>
+          {% endif %}
+        </div>
+        <div class="order-reason"><strong>Evaluation Note:</strong> {{ step.reason }}</div>
+      </div>
     </details>
     {% endfor %}
   </div>
   {% endif %}
 
-  <h3>Comparison table</h3>
-  <div class="table-scroll">
-    <table class="data-table readonly">
-      <thead><tr><th>Order</th><th>Transformation</th><th>Slope</th><th>Intercept</th><th>k</th><th>C<sub>A0</sub></th><th>R&sup2;</th><th>Decision</th></tr></thead>
+  <h3 style="margin: 1.5rem 0 0.5rem;">3. Candidate Comparison Summary Table</h3>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Order $n$</th>
+          <th>Transformation</th>
+          <th>Slope</th>
+          <th>Intercept</th>
+          <th>Rate Constant $k$</th>
+          <th>$C_{A0}$</th>
+          <th>R&sup2;</th>
+          <th>Status</th>
+        </tr>
+      </thead>
       <tbody>
         {% for step in result.all_results|sort(attribute='order') %}
-        <tr class="{{ 'row-best' if step.decision == 'Best' }}">
-          <td>{{ step.order }}</td>
-          <td>{{ step.transformation }}</td>
-          <td>{{ '%.5g' % step.slope if step.slope is not none else '&mdash;' }}</td>
-          <td>{{ '%.5g' % step.intercept if step.intercept is not none else '&mdash;' }}</td>
-          <td>{{ '%.5g' % step.rate_constant if step.rate_constant is not none else '&mdash;' }}</td>
-          <td>{{ '%.5g' % step.initial_concentration if step.initial_concentration else '&mdash;' }}</td>
-          <td>{{ '%.5f' % step.r_squared if step.r_squared is not none else '&mdash;' }}</td>
-          <td>{{ step.decision }}</td>
+        <tr style="{% if step.decision == 'Best' %}background-color: var(--success-bg); font-weight: 600;{% endif %}">
+          <td><strong>{{ step.order }}</strong></td>
+          <td><code>{{ step.transformation }}</code></td>
+          <td>{{ '%.4g' % step.slope if step.slope is not none else '&mdash;' }}</td>
+          <td>{{ '%.4g' % step.intercept if step.intercept is not none else '&mdash;' }}</td>
+          <td>{{ '%.4g' % step.rate_constant if step.rate_constant is not none else '&mdash;' }}</td>
+          <td>{{ '%.4g' % step.initial_concentration if step.initial_concentration else '&mdash;' }}</td>
+          <td>{{ '%.4f' % step.r_squared if step.r_squared is not none else '&mdash;' }}</td>
+          <td>
+            <span class="badge-decision {{ 'best' if step.decision == 'Best' else ('rejected' if step.decision == 'Rejected' else 'candidate') }}">
+              {{ step.decision }}
+            </span>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</section>
-
-<section class="card">
-  <h2>4. Graphical analysis &mdash; best fit</h2>
-  <div id="bestFitGraph" class="graph"></div>
-</section>
-
-<section class="card">
-  <h2>5. Final kinetic parameters</h2>
-  <div class="param-grid">
-    <div class="param"><span class="param-label">Reaction order n</span><span class="param-value">{{ result.reaction_order_display }}</span></div>
-    <div class="param"><span class="param-label">Rate constant k</span><span class="param-value">{{ '%.6g' % result.rate_constant }}</span></div>
-    <div class="param"><span class="param-label">Initial conc. C<sub>A0</sub></span><span class="param-value">{{ '%.6g' % result.initial_concentration }}</span></div>
-  </div>
-  {% if result.approx_note %}<p class="muted">{{ result.approx_note }}</p>{% endif %}
-  <h3>Final rate equation</h3>
-  <p class="equation final-equation">{{ result.final_rate_equation }}</p>
 </section>
 
 {% set pred_n = result.reaction_order %}
@@ -127,43 +287,36 @@
 
 {% elif method_key == 'differential' %}
 
+<!-- Differential Method Numerical Derivative Table -->
 <section class="card">
-  <h2>3. Numerical differentiation</h2>
-  <p class="muted">Forward difference at t&#8320;, central difference at interior points, backward difference at the final point.</p>
-  <div class="table-scroll">
-    <table class="data-table readonly">
-      <thead><tr><th>t</th><th>C<sub>A</sub></th><th>dC/dt</th><th>&minus;dC/dt (rate)</th></tr></thead>
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Numerical Derivatives &amp; Rate Calculation</h2>
+    </div>
+    <span class="field-hint">Central difference differentiation across continuous time points</span>
+  </div>
+
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time $t$</th>
+          <th>Concentration $C_A$</th>
+          <th>$\frac{dC_A}{dt}$</th>
+          <th>$-r_A = -\frac{dC_A}{dt}$</th>
+          <th>$\ln(C_A)$</th>
+          <th>$\ln(-r_A)$</th>
+        </tr>
+      </thead>
       <tbody>
         {% for row in result.derivative_table %}
-        <tr><td>{{ '%.4g' % row.t }}</td><td>{{ '%.4g' % row.C }}</td><td>{{ '%.4g' % row.dCdt }}</td><td>{{ '%.4g' % row.rate }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="card">
-  <h2>4. log(&minus;r_A) vs log(C<sub>A</sub>) &mdash; continuous order</h2>
-  <div id="loglogGraph" class="graph"></div>
-  <div class="param-grid">
-    <div class="param"><span class="param-label">Slope (= n)</span><span class="param-value">{{ '%.5g' % result.slope }}</span></div>
-    <div class="param"><span class="param-label">Intercept</span><span class="param-value">{{ '%.5g' % result.intercept }}</span></div>
-    <div class="param"><span class="param-label">R&sup2;</span><span class="param-value">{{ '%.5f' % result.r_squared }}</span></div>
-  </div>
-</section>
-
-<section class="card">
-  <h2>5. Guess-and-test comparison (integer &amp; half orders)</h2>
-  <div class="table-scroll">
-    <table class="data-table readonly">
-      <thead><tr><th>Order</th><th>Transformation</th><th>k (slope)</th><th>R&sup2;</th><th>Decision</th></tr></thead>
-      <tbody>
-        {% for row in result.guess_and_test %}
         <tr>
-          <td>{{ row.order }}</td><td>{{ row.transformation }}</td>
-          <td>{{ '%.5g' % row.rate_constant if row.rate_constant is not none else '&mdash;' }}</td>
-          <td>{{ '%.5f' % row.r_squared if row.r_squared is not none else '&mdash;' }}</td>
-          <td>{{ row.decision }}</td>
+          <td>{{ '%.4g' % row.t }}</td>
+          <td>{{ '%.4g' % row.C }}</td>
+          <td>{{ '%.4g' % row.dCdt }}</td>
+          <td><strong>{{ '%.4g' % row.rate }}</strong></td>
+          <td>{{ '%.4g' % (row.C|log if row.C > 0 else 0) }}</td>
+          <td>{{ '%.4g' % (row.rate|log if row.rate > 0 else 0) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -172,13 +325,43 @@
 </section>
 
 <section class="card">
-  <h2>6. Final kinetic parameters</h2>
-  <div class="param-grid">
-    <div class="param"><span class="param-label">Reaction order n</span><span class="param-value">{{ result.reaction_order_display }}</span></div>
-    <div class="param"><span class="param-label">Rate constant k</span><span class="param-value">{{ '%.6g' % result.rate_constant }}</span></div>
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Integer &amp; Half-Order Guess-and-Test Comparison</h2>
+    </div>
+    <span class="field-hint">Comparing continuous log-log order vs fixed order origin regressions</span>
   </div>
-  <h3>Final rate equation</h3>
-  <p class="equation final-equation">{{ result.final_rate_equation }}</p>
+
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Order $n$</th>
+          <th>Model Space</th>
+          <th>Fitted $k$ (Slope)</th>
+          <th>R&sup2;</th>
+          <th>Decision</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result.guess_and_test %}
+        <tr>
+          <td><strong>{{ row.order }}</strong></td>
+          <td><code>{{ row.transformation }}</code></td>
+          <td>{{ '%.4g' % row.rate_constant if row.rate_constant is not none else '&mdash;' }}</td>
+          <td>{{ '%.4f' % row.r_squared if row.r_squared is not none else '&mdash;' }}</td>
+          <td>
+            <span class="badge-decision {{ 'best' if row.decision == 'Accepted' or row.decision == 'Accepted (candidate)' else 'rejected' }}">
+              {{ row.decision }}
+            </span>
+          </td>
+          <td style="font-size: 0.82rem; color: var(--text-muted);">{{ row.reason }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 
 {% set pred_n = result.reaction_order %}
@@ -187,91 +370,187 @@
 
 {% elif method_key == 'autocatalytic' %}
 
+<!-- Autocatalytic Reaction Details -->
 <section class="card">
-  <h2>3. Rate calculation &amp; linearization</h2>
-  <p class="muted">&minus;r_A obtained by numerical differentiation of C<sub>A</sub> vs t, then plotted against C<sub>A</sub>&middot;C<sub>B</sub>.</p>
-  <div class="table-scroll">
-    <table class="data-table readonly">
-      <thead><tr><th>t</th><th>C<sub>A</sub></th><th>C<sub>B</sub></th><th>&minus;r_A</th><th>C<sub>A</sub>&middot;C<sub>B</sub></th></tr></thead>
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Autocatalytic Reaction Data &amp; Linearization</h2>
+    </div>
+    <span class="field-hint">Linearization via $-r_A = k(C_A \cdot C_B)$</span>
+  </div>
+
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time $t$</th>
+          <th>$C_A$</th>
+          <th>$C_B$</th>
+          <th>$-r_A = -\frac{dC_A}{dt}$</th>
+          <th>$C_A \cdot C_B$</th>
+        </tr>
+      </thead>
       <tbody>
         {% for row in result.derivative_table %}
-        <tr><td>{{ '%.4g' % row.t }}</td><td>{{ '%.4g' % row.C_A }}</td><td>{{ '%.4g' % row.C_B }}</td><td>{{ '%.4g' % row.rate }}</td><td>{{ '%.4g' % row.X }}</td></tr>
+        <tr>
+          <td>{{ '%.4g' % row.t }}</td>
+          <td>{{ '%.4g' % row.C_A }}</td>
+          <td>{{ '%.4g' % row.C_B }}</td>
+          <td>{{ '%.4g' % row.rate }}</td>
+          <td><strong>{{ '%.4g' % row.X }}</strong></td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
 
-<section class="card">
-  <h2>4. Graphical analysis</h2>
-  <div id="autocatGraph" class="graph"></div>
-  <div class="param-grid">
-    <div class="param"><span class="param-label">Slope (= k)</span><span class="param-value">{{ '%.5g' % result.slope }}</span></div>
-    <div class="param"><span class="param-label">R&sup2;</span><span class="param-value">{{ '%.5f' % result.r_squared }}</span></div>
-    <div class="param"><span class="param-label">Decision</span><span class="param-value">{{ result.decision }}</span></div>
-  </div>
-  <p class="reason">{{ result.reason }}</p>
-</section>
-
-<section class="card">
-  <h2>5. Final rate equation</h2>
-  <p class="equation final-equation">{{ result.final_rate_equation }}</p>
-</section>
-
 {% elif method_key == 'reversible' %}
 
+<!-- Reversible Reaction Details -->
 <section class="card">
-  <h2>3. Linearization</h2>
-  <p class="equation">{{ result.transform_equation }}</p>
-  <div id="reversibleGraph" class="graph"></div>
-  <div class="param-grid">
-    <div class="param"><span class="param-label">Slope (= &minus;(k1+k2))</span><span class="param-value">{{ '%.5g' % result.slope }}</span></div>
-    <div class="param"><span class="param-label">R&sup2;</span><span class="param-value">{{ '%.5f' % result.r_squared }}</span></div>
-    <div class="param"><span class="param-label">C<sub>Ae</sub> used</span><span class="param-value">{{ '%.5g' % result.equilibrium_concentration }}</span></div>
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Reversible Kinetic Model Decomposition</h2>
+    </div>
+    <span class="field-hint">Equilibrium integration: $\ln\left[\frac{C_A-C_{Ae}}{C_{A0}-C_{Ae}}\right] = -(k_1+k_2)t$</span>
   </div>
-  <p class="reason">{{ result.reason }}</p>
-</section>
 
-<section class="card">
-  <h2>4. Final kinetic parameters</h2>
-  <div class="param-grid">
-    <div class="param"><span class="param-label">Forward k1</span><span class="param-value">{{ '%.6g' % result.forward_rate_constant }}</span></div>
-    <div class="param"><span class="param-label">Reverse k2</span><span class="param-value">{{ '%.6g' % result.reverse_rate_constant }}</span></div>
-    <div class="param"><span class="param-label">K = k1/k2</span><span class="param-value">{{ '%.5g' % result.equilibrium_constant }}</span></div>
+  <div class="metrics-dashboard" style="margin-bottom: 0.5rem;">
+    <div class="metric-card">
+      <span class="metric-label">Forward Constant $k_1$</span>
+      <div class="metric-value" style="font-size: 1.5rem;">{{ '%.5g' % result.forward_rate_constant }}</div>
+      <span class="metric-sub">$A \to B$ conversion rate</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-label">Reverse Constant $k_2$</span>
+      <div class="metric-value" style="font-size: 1.5rem;">{{ '%.5g' % result.reverse_rate_constant }}</div>
+      <span class="metric-sub">$B \to A$ conversion rate</span>
+    </div>
+    <div class="metric-card accent-cyan">
+      <span class="metric-label">Equilibrium Constant $K_{eq}$</span>
+      <div class="metric-value" style="font-size: 1.5rem;">{{ '%.4g' % result.equilibrium_constant }}</div>
+      <span class="metric-sub">$K_{eq} = k_1 / k_2$</span>
+    </div>
   </div>
-  <h3>Final rate equation</h3>
-  <p class="equation final-equation">{{ result.final_rate_equation }}</p>
 </section>
 
 {% endif %}
 
+<!-- Interactive Prediction & Simulation Sandbox -->
 {% if method_key in ['integral', 'irreversible', 'differential'] %}
 <section class="card">
-  <h2>Prediction calculator</h2>
-  <p class="muted">Uses the final model: -r_A = k&middot;C_A^n, n = {{ '%.4g' % pred_n }}, k = {{ '%.6g' % pred_k }}, C<sub>A0</sub> = {{ '%.6g' % pred_c0 }}</p>
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Interactive Prediction &amp; Reactor Simulation Sandbox</h2>
+    </div>
+    <span class="field-hint">Real-time evaluations using the derived model: $-r_A = k C_A^n$ ($n = {{ '%.2f' % pred_n }}$, $k = {{ '%.4g' % pred_k }}$, $C_{A0} = {{ '%.4g' % pred_c0 }}$)</span>
+  </div>
 
-  <div class="predict-grid" data-n="{{ pred_n }}" data-k="{{ pred_k }}" data-c0="{{ pred_c0 }}">
-    <div class="predict-box">
-      <h4>Concentration at time t</h4>
-      <input type="number" step="any" class="pred-input" data-mode="concentration" data-field="t" placeholder="t">
-      <button type="button" class="btn btn-secondary predict-btn" data-mode="concentration">Calculate C<sub>A</sub></button>
-      <p class="predict-result" data-result="concentration"></p>
+  <div class="prediction-sandbox" data-n="{{ pred_n }}" data-k="{{ pred_k }}" data-c0="{{ pred_c0 }}">
+    <!-- Mode 1: Predict CA(t) -->
+    <div class="predict-panel">
+      <h4 class="predict-panel-title">1. Predict Concentration $C_A(t)$</h4>
+      <p style="font-size: 0.82rem; color: var(--text-muted);">Enter reaction time $t$ to calculate residual concentration and conversion.</p>
+      
+      <div class="field-group">
+        <label class="field-label" style="font-size: 0.8rem;">Time $t$</label>
+        <input type="number" step="any" min="0" class="pred-input" data-mode="concentration" data-field="t" placeholder="e.g. 25.0">
+      </div>
+
+      <button type="button" class="btn btn-primary btn-sm predict-btn" data-mode="concentration">
+        Calculate $C_A$
+      </button>
+
+      <div class="predict-calc-box">
+        <div>
+          <div class="predict-output-val" data-result="concentration">&mdash;</div>
+          <div class="predict-output-sub" data-sub="concentration">Enter time above</div>
+        </div>
+      </div>
     </div>
-    <div class="predict-box">
-      <h4>Time to reach concentration C</h4>
-      <input type="number" step="any" class="pred-input" data-mode="time" data-field="C" placeholder="C">
-      <button type="button" class="btn btn-secondary predict-btn" data-mode="time">Calculate t</button>
-      <p class="predict-result" data-result="time"></p>
+
+    <!-- Mode 2: Predict time t for target CA -->
+    <div class="predict-panel">
+      <h4 class="predict-panel-title">2. Predict Time to Reach $C_A$</h4>
+      <p style="font-size: 0.82rem; color: var(--text-muted);">Enter desired target concentration $C_A$ ($C_A \le C_{A0}$).</p>
+      
+      <div class="field-group">
+        <label class="field-label" style="font-size: 0.8rem;">Target Concentration $C_A$</label>
+        <input type="number" step="any" min="0" max="{{ pred_c0 }}" class="pred-input" data-mode="time" data-field="C" placeholder="e.g. {{ '%.2f' % (pred_c0 / 2) }}">
+      </div>
+
+      <button type="button" class="btn btn-primary btn-sm predict-btn" data-mode="time">
+        Calculate Time $t$
+      </button>
+
+      <div class="predict-calc-box">
+        <div>
+          <div class="predict-output-val" data-result="time">&mdash;</div>
+          <div class="predict-output-sub" data-sub="time">Enter target concentration</div>
+        </div>
+      </div>
     </div>
-    <div class="predict-box">
-      <h4>Rate at concentration C</h4>
-      <input type="number" step="any" class="pred-input" data-mode="rate" data-field="C" placeholder="C">
-      <button type="button" class="btn btn-secondary predict-btn" data-mode="rate">Calculate -r_A</button>
-      <p class="predict-result" data-result="rate"></p>
+
+    <!-- Mode 3: Instantaneous Rate -->
+    <div class="predict-panel">
+      <h4 class="predict-panel-title">3. Instantaneous Reaction Rate</h4>
+      <p style="font-size: 0.82rem; color: var(--text-muted);">Enter instantaneous concentration $C_A$ to compute $-r_A$.</p>
+      
+      <div class="field-group">
+        <label class="field-label" style="font-size: 0.8rem;">Concentration $C_A$</label>
+        <input type="number" step="any" min="0" class="pred-input" data-mode="rate" data-field="C" placeholder="e.g. {{ '%.2f' % (pred_c0 * 0.8) }}">
+      </div>
+
+      <button type="button" class="btn btn-primary btn-sm predict-btn" data-mode="rate">
+        Calculate Rate $-r_A$
+      </button>
+
+      <div class="predict-calc-box">
+        <div>
+          <div class="predict-output-val" data-result="rate">&mdash;</div>
+          <div class="predict-output-sub" data-sub="rate">Enter concentration above</div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 {% endif %}
+
+<!-- Review Input Experimental Data Table -->
+<section class="card">
+  <div class="card-header-row">
+    <div class="card-title-group">
+      <h2 class="card-title">Experimental Input Data Summary</h2>
+    </div>
+    <span class="field-hint">{{ result.original_data.t|length }} recorded data points</span>
+  </div>
+
+  <div class="table-container">
+    <table class="data-table" id="rawResultsDataTable">
+      <thead>
+        <tr>
+          <th>Time $t$</th>
+          <th>Concentration $C_A$</th>
+          {% if method_key == 'autocatalytic' %}
+          <th>Concentration $C_B$</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in range(result.original_data.t|length) %}
+        <tr>
+          <td>{{ '%.4g' % result.original_data.t[i] }}</td>
+          <td>{{ '%.4g' % (result.original_data.C_A[i] if method_key == 'autocatalytic' else result.original_data.C[i]) }}</td>
+          {% if method_key == 'autocatalytic' %}
+          <td>{{ '%.4g' % result.original_data.C_B[i] }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 
 {% endblock %}
 
@@ -283,3 +562,4 @@
 </script>
 <script src="{{ url_for('static', filename='js/results_graphs.js') }}"></script>
 {% endblock %}
+
