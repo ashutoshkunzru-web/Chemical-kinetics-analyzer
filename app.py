@@ -8,6 +8,11 @@ from services import integral_method, differential_method, autocatalytic, revers
 
 app = Flask(__name__)
 
+from flask_cors import CORS
+
+CORS(app)
+
+
 METHODS = {
     "integral": "Integral Method",
     "differential": "Differential Method",

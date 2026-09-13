@@ -124,7 +124,10 @@
 
         resultEl.textContent = "Calculating\u2026";
 
-        fetch(window.PREDICT_URL || "/predict", { method: "POST", body: formData })
+        fetch(window.PREDICT_URL || "https://chemical-kinetics-analyzer-2.onrender.com/predict", { 
+          method: "POST", 
+          body: formData 
+      })
           .then((r) => r.json())
           .then((data) => {
             if (data.ok) {
