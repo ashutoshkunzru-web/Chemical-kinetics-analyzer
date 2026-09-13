@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Chemical Reaction Kinetics Analyzer{% endblock %}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="{{ url_for('frontend', filename='css/style.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
 </head>
 <body>
@@ -26,7 +26,7 @@
     <p>Built for coursework in Chemical Reaction Engineering. Every result shown is derived transparently from the data you provide.</p>
   </footer>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('frontend', filename='js/main.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
