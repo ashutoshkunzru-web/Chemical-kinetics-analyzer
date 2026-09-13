@@ -6,7 +6,7 @@ from flask import Flask, render_template, request
 from services.validation import validate_manual_data, validate_csv, ValidationError
 from services import integral_method, differential_method, autocatalytic, reversible, irreversible, prediction
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='frontend', static_url_path='/frontend')
 
 from flask_cors import CORS
 
